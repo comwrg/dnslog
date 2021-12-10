@@ -225,12 +225,13 @@ server.on('query', function (query) {
   var domain = query.name()
   console.log('DNS Query: %s', domain)
   var arr = domain.split('.')
-  if (arr.length >= 3) {
-    var qdomain = arr.slice(-3).join('.')
-    if (typeof (gsocket[qdomain]) !== "undefined") {
-      gsocket[qdomain].emit('dnslog', {dnslog: domain + " from " + query._client.address})
-    }
-  }
+  if (arr.length < 3)
+    return
+  var qdomain = arr.slice(-3).join('.')
+  if (typeof (gsocket[qdomain]) === "undefined")
+    return
+
+  gsocket[qdomain].emit('dnslog', {dnslog: domain + " from " + query._client.address})
   var ip = '127.0.0.1'
   if (arr.length >= 3 + 4 && net.isIP(arr.slice(0, 4).join('.'))) {
     ip = arr.slice(0, 4).join('.')
