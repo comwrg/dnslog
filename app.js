@@ -1,6 +1,6 @@
 var named = require('./lib/index')
 var server = named.createServer()
-var ttl = 300
+var ttl = 1
 var rebind = {}
 var app = require('express')()
 var httpserver = require('http').Server(app)
@@ -224,53 +224,20 @@ server.listen(config.dns_port, '0.0.0.0', function () {
 server.on('query', function (query) {
   var domain = query.name()
   console.log('DNS Query: %s', domain)
-  if (domain == 'rebind.test.com') {
-    if (typeof (rebind.times) == 'undefined') {
-      rebind.times = 1
-      var record = new named.ARecord('127.0.0.1')
-      query.addAnswer(domain, record, 0)
-      query.respond()
-    } else {
-      var record = new named.ARecord('8.8.8.8')
-      query.addAnswer(domain, record, 0)
-      query.respond()
-      rebind.times++
+  var arr = domain.split('.')
+  if (arr.length >= 3) {
+    var qdomain = arr.slice(-3).join('.')
+    if (typeof (gsocket[qdomain]) !== "undefined") {
+      gsocket[qdomain].emit('dnslog', {dnslog: domain + " from " + query._client.address})
     }
-  } else {
-    if (domain.split('.').length > 3) {
-      var qdomain = domain.split('.').slice(-4).join('.')
-      console.log(qdomain)
-      if (typeof (gsocket[qdomain]) !== "undefined") {
-        gsocket[qdomain].emit('dnslog', {dnslog: domain + " from " + query._client.address})
-      }
-      safeQuery('select id from dnslog_user where subdomain= :subdomain', {
-        subdomain: qdomain
-      }, function (qres) {
-        if (qres.length > 0) {
-          safeQuery('insert into dnslog_log (dnslog,inserttime,ip,userid) values (:dnslog,:inserttime,:ip,:userid)', {
-            dnslog: domain,
-            inserttime: currentTime(),
-            ip: query._client.address,
-            userid: qres[0]['id']
-          }, function () {
-            if (typeof (gsocket[qdomain]) == "undefined") {
-              safeQuery('select email from dnslog_user where subdomain= :subdomain', {
-                subdomain: qdomain
-              }, function (qres) {
-                if (qres[0]['email'] !== "") {
-                  var mailcontent = "You have a new dnslog: \n" + domain + "\nFrom ip: " + query._client.address
-                  mail.send(qres[0]['email'], "【NEW DNSLOG】" + domain, mailcontent)
-                }
-              })
-            }
-          })
-        }
-      })
-    }
-    var record = new named.ARecord('8.8.8.8')
-    query.addAnswer(domain, record, ttl)
-    query.respond()
   }
+  var ip = '127.0.0.1'
+  if (arr.length >= 3 + 4 && net.isIP(arr.slice(0, 4).join('.'))) {
+    ip = arr.slice(0, 4).join('.')
+  }
+  var record = new named.ARecord(ip)
+  query.addAnswer(domain, record, ttl)
+  query.respond()
 })
 
 /*
